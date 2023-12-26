@@ -3,10 +3,38 @@
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
+#include <cmath>
 
 float inverse[4][4];
-float abcdMatrix[4] = { 0.0, 0.0, 0.0, 0.0 };
-bool readyToDraw = false;
+float abcdMatrix[4][2] = { 
+    0.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 0.0};
+bool readyToDraw1 = false;
+bool readyToDraw2 = false;
+bool readyToDrawBez = false;
+float a[4][4],b[4][4], k = 4;
+int nodeNum = 0;
+int option = 1;
+GLsizei windowWidth = 1000;
+GLsizei windowHeight = 1000;
+float click_x = 0;
+float click_y = 0;
+float drag_x = 0;
+float drag_y = 0;
+int selectedNodeIndex = -1;
+double startX = 0;  
+double startY = 0;
+
+struct Point {
+    GLfloat x, y, z;
+    Point() : x(0), y(0), z(0) {};
+    Point(GLfloat x, GLfloat y, GLfloat z) : x(x), y(y), z(z) {}
+};
+Point points[8];
+Point pointsBez[7];
+
+#define M_PI 3.14159265358979323846
+
 
 //https://www.sanfoundry.com/c-program-find-inverse-matrix/
 float determinant(float a[4][4], float k)
@@ -115,26 +143,15 @@ void cofactor(float num[4][4], float f)
     transpose(num, fac, f);
 }
 
-// Define a simple structure for 3D points
-struct Point {
-	GLfloat x, y, z;
-	Point() : x(0), y(0), z(0) {};
-	Point(GLfloat x, GLfloat y, GLfloat z) : x(x), y(y), z(z) {}
-};
-
-float a[4][4], k = 4;
-int clicksLeft = 7;
-int nodeNum = 0;
-int option = 1;
-GLsizei windowWidth = 1000;
-GLsizei windowHeight = 1000;
-Point points[10];
-
-#define M_PI 3.14159265358979323846
-
 void menu(int menuOption) {
-	if (menuOption == 1) option = 1;
-	if (menuOption == 2) option = 2;
+    if (menuOption == 1) { 
+        option = 1; 
+        nodeNum = 0;
+    }
+    if (menuOption == 2) {
+        option = 2;
+        nodeNum = 0;
+    }
 	if (menuOption == 3) option = 3;
 	if (menuOption == 4) option = 4;
 
@@ -172,34 +189,349 @@ void idle(void) {
 	glutPostRedisplay();
 }
 
-void mouse(int button, int state, int x, int y) {
-	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-		y = 1000 - y;
-		points[nodeNum] = Point(x, y, 0);
-        a[nodeNum][0] = pow(points[nodeNum].x, 3);
-        a[nodeNum][1] = pow(points[nodeNum].x, 2);
-        a[nodeNum][2] = points[nodeNum].x;
-        a[nodeNum][3] = 1;
-        nodeNum++;
-        if(nodeNum==4){
+//u range 0 to 1
+float lerp(float a, float b, float u) {
+    return (a * (1.0 - u)) + (b * u);
+}
+
+void onDrag(int x, int y) {
+    if (option == 1) {
+        drag_x = (click_x - x);
+        drag_y = (click_y - (1000 - y));
+        if (selectedNodeIndex == 3 || selectedNodeIndex == 4) {
+            points[3].x = startX - drag_x;
+            points[3].y = startY - drag_y;
+            points[4].x = startX - drag_x;
+            points[4].y = startY - drag_y;
+        }
+        else {
+            points[selectedNodeIndex].x = startX - drag_x;
+            points[selectedNodeIndex].y = startY - drag_y;
+        }
+        if (selectedNodeIndex < 3) {
+            a[selectedNodeIndex][0] = pow(points[selectedNodeIndex].x, 3);
+            a[selectedNodeIndex][1] = pow(points[selectedNodeIndex].x, 2);
+            a[selectedNodeIndex][2] = points[selectedNodeIndex].x;
+            a[selectedNodeIndex][3] = 1;
+
             float d = determinant(a, k);
             if (d == 0)
                 printf("\nInverse of Entered Matrix is not possible\n");
             else {
                 cofactor(a, k);
                 for (int i = 0; i < 4; i++) {
-                    abcdMatrix[i] = 0.0;
+                    abcdMatrix[i][0] = 0.0;
                     for (int j = 0; j < 4; j++) {
-                        abcdMatrix[i] += inverse[i][j] * points[j].y;
+                        abcdMatrix[i][0] += inverse[i][j] * points[j].y;
                     }
                 }
-                printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0], abcdMatrix[1], abcdMatrix[2], abcdMatrix[3]);
-                readyToDraw = true;
+                printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0][0], abcdMatrix[1][0], abcdMatrix[2][0], abcdMatrix[3][0]);
             }
-                
-
         }
-	}
+        else if (selectedNodeIndex > 4) {
+            b[selectedNodeIndex % 4][0] = pow(points[selectedNodeIndex].x, 3);
+            b[selectedNodeIndex % 4][1] = pow(points[selectedNodeIndex].x, 2);
+            b[selectedNodeIndex % 4][2] = points[selectedNodeIndex].x;
+            b[selectedNodeIndex % 4][3] = 1;
+
+            float d = determinant(b, k);
+            if (d == 0)
+                printf("\nInverse of Entered Matrix is not possible\n");
+            else {
+                cofactor(b, k);
+                for (int i = 0; i < 4; i++) {
+                    abcdMatrix[i][1] = 0.0;
+                    for (int j = 0; j < 4; j++) {
+                        abcdMatrix[i][1] += inverse[i][j] * points[j + 4].y;
+                    }
+                }
+                printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0][1], abcdMatrix[1][1], abcdMatrix[2][1], abcdMatrix[3][1]);
+            }
+        }
+        else {
+            a[3][0] = pow(points[selectedNodeIndex].x, 3);
+            a[3][1] = pow(points[selectedNodeIndex].x, 2);
+            a[3][2] = points[selectedNodeIndex].x;
+            a[3][3] = 1;
+            b[0][0] = a[3][0];
+            b[0][1] = a[3][1];
+            b[0][2] = a[3][2];
+            b[0][3] = a[3][3];
+
+            float d = determinant(a, k);
+            if (d == 0)
+                printf("\nInverse of Entered Matrix is not possible\n");
+            else {
+                cofactor(a, k);
+                for (int i = 0; i < 4; i++) {
+                    abcdMatrix[i][0] = 0.0;
+                    for (int j = 0; j < 4; j++) {
+                        abcdMatrix[i][0] += inverse[i][j] * points[j].y;
+                    }
+                }
+                printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0][0], abcdMatrix[1][0], abcdMatrix[2][0], abcdMatrix[3][0]);
+            }
+
+            d = determinant(b, k);
+            if (d == 0)
+                printf("\nInverse of Entered Matrix is not possible\n");
+            else {
+                cofactor(b, k);
+                for (int i = 0; i < 4; i++) {
+                    abcdMatrix[i][1] = 0.0;
+                    for (int j = 0; j < 4; j++) {
+                        abcdMatrix[i][1] += inverse[i][j] * points[j + 4].y;
+                    }
+                }
+                printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0][1], abcdMatrix[1][1], abcdMatrix[2][1], abcdMatrix[3][1]);
+            }
+        }
+        glutPostRedisplay();
+    }
+    else if (option == 2) {
+        drag_x = (click_x - x);
+        pointsBez[selectedNodeIndex].x = startX - drag_x;
+        pointsBez[selectedNodeIndex].y = startY - drag_y;        
+        glutPostRedisplay();
+    }
+}
+
+
+void mouse(int button, int state, int x, int y) {
+    if (option == 1) {
+        if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+            if (readyToDraw1 && readyToDraw2) {
+                glutMotionFunc(onDrag);
+                drag_x = 0;
+                drag_y = 0;
+                click_x = x;
+                click_y = 1000 - y;
+                int minDistancePointIndex = 0;
+                for (int i = 0; i < 8; i++) {
+                    if (sqrt(pow(points[i].x - click_x, 2) + pow(points[i].y - click_y, 2)) < sqrt(pow(points[minDistancePointIndex].x - click_x, 2) + pow(points[minDistancePointIndex].y - click_y, 2))) {
+                        minDistancePointIndex = i;
+                    }
+                }
+                if (sqrt(pow(points[minDistancePointIndex].x - click_x, 2) + pow(points[minDistancePointIndex].y - click_y, 2)) < 7) {
+                    selectedNodeIndex = minDistancePointIndex;
+                    startX = points[selectedNodeIndex].x;
+                    startY = points[selectedNodeIndex].y;
+                }
+                else {
+                    glutMotionFunc(NULL);
+                }
+            }
+            else {
+                y = 1000 - y;
+                points[nodeNum] = Point(x, y, 0);
+                if (nodeNum < 4) {
+                    a[nodeNum][0] = pow(points[nodeNum].x, 3);
+                    a[nodeNum][1] = pow(points[nodeNum].x, 2);
+                    a[nodeNum][2] = points[nodeNum].x;
+                    a[nodeNum][3] = 1;
+                }
+                else {
+                    b[nodeNum % 4][0] = pow(points[nodeNum].x, 3);
+                    b[nodeNum % 4][1] = pow(points[nodeNum].x, 2);
+                    b[nodeNum % 4][2] = points[nodeNum].x;
+                    b[nodeNum % 4][3] = 1;
+                }
+
+                nodeNum++;
+                if (nodeNum % 4 == 0) {
+                    float d;
+                    if (readyToDraw1) {
+                        d = determinant(b, k);
+                        if (d == 0)
+                            printf("\nInverse of Entered Matrix is not possible\n");
+                        else {
+                            cofactor(b, k);
+                            readyToDraw2 = true;
+                            for (int i = 0; i < 4; i++) {
+                                abcdMatrix[i][1] = 0.0;
+                                for (int j = 0; j < 4; j++) {
+                                    abcdMatrix[i][1] += inverse[i][j] * points[j + 4].y;
+                                }
+                            }
+                            printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0][1], abcdMatrix[1][1], abcdMatrix[2][1], abcdMatrix[3][1]);
+                        }
+                    }
+                    else {
+                        d = determinant(a, k);
+                        if (d == 0)
+                            printf("\nInverse of Entered Matrix is not possible\n");
+                        else {
+                            cofactor(a, k);
+                            readyToDraw1 = true;
+                            b[0][0] = a[3][0];
+                            b[0][1] = a[3][1];
+                            b[0][2] = a[3][2];
+                            b[0][3] = a[3][3];
+                            points[nodeNum] = Point(x, y, 0);
+                            nodeNum++;
+                            for (int i = 0; i < 4; i++) {
+                                abcdMatrix[i][0] = 0.0;
+                                for (int j = 0; j < 4; j++) {
+                                    abcdMatrix[i][0] += inverse[i][j] * points[j].y;
+                                }
+                            }
+                            printf("a=%f, b=%f, c=%f, d=%f", abcdMatrix[0][0], abcdMatrix[1][0], abcdMatrix[2][0], abcdMatrix[3][0]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    else if (option == 2) {
+        if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+            if (readyToDrawBez) {
+                glutMotionFunc(onDrag);
+                drag_x = 0;
+                drag_y = 0;
+                click_x = x;
+                click_y = 1000 - y;
+                int minDistancePointIndex = 0;
+                for (int i = 0; i < 6; i++) {
+                    if (sqrt(pow(pointsBez[i].x - click_x, 2) + pow(pointsBez[i].y - click_y, 2)) < sqrt(pow(pointsBez[minDistancePointIndex].x - click_x, 2) + pow(pointsBez[minDistancePointIndex].y - click_y, 2))) {
+                        minDistancePointIndex = i;
+                    }
+                }
+                if (sqrt(pow(pointsBez[minDistancePointIndex].x - click_x, 2) + pow(pointsBez[minDistancePointIndex].y - click_y, 2)) < 20) {
+                    selectedNodeIndex = minDistancePointIndex;
+                    startX = pointsBez[selectedNodeIndex].x;
+                    startY = pointsBez[selectedNodeIndex].y;
+                }
+                else {
+                    glutMotionFunc(NULL);
+                }
+            }
+            else {
+                y = 1000 - y;
+                pointsBez[nodeNum] = Point(x, y, 0);
+                nodeNum++;
+                printf("%d", nodeNum);
+                if (nodeNum == 6) {
+                    readyToDrawBez = true;
+                }
+            }
+        }
+    }
+}
+
+void displayOption1(void) {
+    glPointSize(10);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < 8; i++) {
+        glVertex3f(points[i].x, points[i].y, points[i].z);
+    }
+    glEnd();
+
+    if (readyToDraw1) {
+        float maxX = points[0].x;
+        float minX = points[0].x;
+        for (int i = 0; i < 4; i++) {
+            if (points[i].x > maxX) {
+                maxX = points[i].x;
+            }
+            if (points[i].x < minX) {
+                minX = points[i].x;
+            }
+        }
+        glColor3f(0.7f, 0.0f, 1.0f);
+
+        glBegin(GL_LINE_STRIP);
+        for (double x = minX; x <= maxX; x++) {
+            glVertex3f(x, abcdMatrix[0][0] * pow(x, 3) + abcdMatrix[1][0] * pow(x, 2) + abcdMatrix[2][0] * x + abcdMatrix[3][0], 0);
+        }
+        glEnd();
+    }
+    if (readyToDraw2) {
+        float maxX = points[4].x;
+        float minX = points[4].x;
+        for (int i = 4; i < 8; i++) {
+            if (points[i].x > maxX) {
+                maxX = points[i].x;
+            }
+            if (points[i].x < minX) {
+                minX = points[i].x;
+            }
+        }
+        glColor3f(0.7f, 0.0f, 1.0f);
+
+        glBegin(GL_LINE_STRIP);
+        for (double x = minX; x <= maxX; x++) {
+            glVertex3f(x, abcdMatrix[0][1] * pow(x, 3) + abcdMatrix[1][1] * pow(x, 2) + abcdMatrix[2][1] * x + abcdMatrix[3][1], 0);
+        }
+        glEnd();
+    }
+}
+
+void displayOption2(void) {
+    glPointSize(10);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < 6; i++) {
+        glVertex3f(pointsBez[i].x, pointsBez[i].y, pointsBez[i].z);
+    }
+    glEnd();
+
+    if (readyToDrawBez == true) {
+        float maxX = pointsBez[0].x;
+        float minX = pointsBez[0].x;
+        for (int i = 0; i < 6; i++) {
+            if (pointsBez[i].x > maxX) {
+                maxX = pointsBez[i].x;
+            }
+            if (pointsBez[i].x < minX) {
+                minX = pointsBez[i].x;
+            }
+        }
+        glColor3f(0.7f, 0.0f, 1.0f);
+
+        glBegin(GL_LINE_STRIP);
+        for (double u=0; u <= 1.0; u+=1.0/(maxX-minX)) {
+            glVertex3f(
+                //x interpolation
+                lerp(lerp(lerp(lerp(lerp(lerp(pointsBez[0].x, pointsBez[1].x, u), lerp(pointsBez[1].x, pointsBez[2].x, u), u),
+                lerp(lerp(pointsBez[1].x, pointsBez[2].x, u), lerp(pointsBez[2].x, pointsBez[3].x, u), u), u),
+                lerp(lerp(lerp(pointsBez[1].x, pointsBez[2].x, u), lerp(pointsBez[2].x, pointsBez[3].x, u), u),
+                    lerp(lerp(pointsBez[2].x, pointsBez[3].x, u), lerp(pointsBez[3].x, pointsBez[4].x, u), u), u), u),
+                lerp(lerp(lerp(lerp(pointsBez[1].x, pointsBez[2].x, u), lerp(pointsBez[2].x, pointsBez[3].x, u), u),
+                    lerp(lerp(pointsBez[2].x, pointsBez[3].x, u), lerp(pointsBez[3].x, pointsBez[4].x, u), u), u),
+                    lerp(lerp(lerp(pointsBez[2].x, pointsBez[3].x, u), lerp(pointsBez[3].x, pointsBez[4].x, u), u),
+                        lerp(lerp(pointsBez[3].x, pointsBez[4].x, u), lerp(pointsBez[4].x, pointsBez[5].x, u), u), u), u), u),
+                lerp(lerp(lerp(lerp(lerp(pointsBez[1].x, pointsBez[2].x, u), lerp(pointsBez[2].x, pointsBez[3].x, u), u),
+                    lerp(lerp(pointsBez[2].x, pointsBez[3].x, u), lerp(pointsBez[3].x, pointsBez[4].x, u), u), u),
+                    lerp(lerp(lerp(pointsBez[2].x, pointsBez[3].x, u), lerp(pointsBez[3].x, pointsBez[4].x, u), u),
+                        lerp(lerp(pointsBez[3].x, pointsBez[4].x, u), lerp(pointsBez[4].x, pointsBez[5].x, u), u), u), u),
+                    lerp(lerp(lerp(lerp(pointsBez[2].x, pointsBez[3].x, u), lerp(pointsBez[3].x, pointsBez[4].x, u), u),
+                        lerp(lerp(pointsBez[3].x, pointsBez[4].x, u), lerp(pointsBez[4].x, pointsBez[5].x, u), u), u),
+                        lerp(lerp(lerp(pointsBez[3].x, pointsBez[4].x, u), lerp(pointsBez[4].x, pointsBez[5].x, u), u),
+                            lerp(lerp(pointsBez[4].x, pointsBez[5].x, u), lerp(pointsBez[5].x, pointsBez[0].x, u), u), u), u), u),u)
+                ,
+                //y interpolation
+                lerp(lerp(lerp(lerp(lerp(lerp(pointsBez[0].y, pointsBez[1].y, u), lerp(pointsBez[1].y, pointsBez[2].y, u),u),
+                            lerp(lerp(pointsBez[1].y, pointsBez[2].y, u), lerp(pointsBez[2].y, pointsBez[3].y, u),u),u),
+                        lerp(lerp(lerp(pointsBez[1].y, pointsBez[2].y, u), lerp(pointsBez[2].y, pointsBez[3].y, u), u),
+                            lerp(lerp(pointsBez[2].y, pointsBez[3].y, u), lerp(pointsBez[3].y, pointsBez[4].y, u), u), u),u),
+                    lerp(lerp(lerp(lerp(pointsBez[1].y, pointsBez[2].y, u), lerp(pointsBez[2].y, pointsBez[3].y, u), u),
+                        lerp(lerp(pointsBez[2].y, pointsBez[3].y, u), lerp(pointsBez[3].y, pointsBez[4].y, u), u), u),
+                        lerp(lerp(lerp(pointsBez[2].y, pointsBez[3].y, u), lerp(pointsBez[3].y, pointsBez[4].y, u), u),
+                            lerp(lerp(pointsBez[3].y, pointsBez[4].y, u), lerp(pointsBez[4].y, pointsBez[5].y, u), u), u), u),u),
+                lerp(lerp(lerp(lerp(lerp(pointsBez[1].y, pointsBez[2].y, u), lerp(pointsBez[2].y, pointsBez[3].y, u), u),
+                    lerp(lerp(pointsBez[2].y, pointsBez[3].y, u), lerp(pointsBez[3].y, pointsBez[4].y, u), u), u),
+                    lerp(lerp(lerp(pointsBez[2].y, pointsBez[3].y, u), lerp(pointsBez[3].y, pointsBez[4].y, u), u),
+                        lerp(lerp(pointsBez[3].y, pointsBez[4].y, u), lerp(pointsBez[4].y, pointsBez[5].y, u), u), u), u),
+                    lerp(lerp(lerp(lerp(pointsBez[2].y, pointsBez[3].y, u), lerp(pointsBez[3].y, pointsBez[4].y, u), u),
+                        lerp(lerp(pointsBez[3].y, pointsBez[4].y, u), lerp(pointsBez[4].y, pointsBez[5].y, u), u), u),
+                        lerp(lerp(lerp(pointsBez[3].y, pointsBez[4].y, u), lerp(pointsBez[4].y, pointsBez[5].y, u), u),
+                            lerp(lerp(pointsBez[4].y, pointsBez[5].y, u), lerp(pointsBez[5].y, pointsBez[0].y, u), u), u), u), u), u)
+                //z
+                , 0);
+        }
+        glEnd();
+    }
 }
 
 void display(void) {
@@ -207,31 +539,14 @@ void display(void) {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	
-	glPointSize(10);
-	glColor3f(1.0f, 0.0f, 0.0f);
-	glBegin(GL_POINTS);
-	for (int i = 0; i < 4; i++) {
-		glVertex3f(points[i].x, points[i].y, points[i].z);
-	}
-	glEnd();
 
-    if (readyToDraw) {
-        float maxX = points[0].x;
-        for (int i = 0; i < 4; i++) {
-            if (points[i].x > maxX) {
-                maxX = points[i].x;
-            }
-        }
-
-
-        glBegin(GL_LINE_STRIP);
-        for (double x = points[0].x; x <= maxX; x++) {
-            glVertex3f(x, abcdMatrix[0] * pow(x, 3) + abcdMatrix[1] * pow(x, 2) + abcdMatrix[2] * x + abcdMatrix[3], 0);
-        }
-        glEnd();
+    if (option == 1) {
+        displayOption1();
     }
-    
-
+    else if (option == 2) {
+        displayOption2();
+    }
+	
 	glutSwapBuffers();
 }
 
@@ -248,6 +563,7 @@ int main(int argc, char** argv)
 	glutDisplayFunc(display); /* display callback invoked when window opened */
 	glutReshapeFunc(reshape);
 	glutIdleFunc(idle);
+    
 	glutMouseFunc(mouse);
 	glutMainLoop(); /* enter event loop */
 	
