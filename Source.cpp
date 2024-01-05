@@ -12,6 +12,8 @@ float abcdMatrix[4][2] = {
 bool readyToDraw1 = false;
 bool readyToDraw2 = false;
 bool readyToDrawBez = false;
+bool readyToDrawBez1 = false;
+bool readyToDrawBez2 = false;
 float a[4][4],b[4][4], k = 4;
 int nodeNum = 0;
 int option = 1;
@@ -32,6 +34,7 @@ struct Point {
 };
 Point points[8];
 Point pointsBez[7];
+Point pointsBezCubic[7];
 
 #define M_PI 3.14159265358979323846
 
@@ -152,7 +155,10 @@ void menu(int menuOption) {
         option = 2;
         nodeNum = 0;
     }
-	if (menuOption == 3) option = 3;
+    if (menuOption == 3) {
+        option = 3;
+        nodeNum = 0;
+    }
 	if (menuOption == 4) option = 4;
 
 	glutPostRedisplay();
@@ -290,12 +296,28 @@ void onDrag(int x, int y) {
     }
     else if (option == 2) {
         drag_x = (click_x - x);
+        drag_y = (click_y - 1000 + y);
         pointsBez[selectedNodeIndex].x = startX - drag_x;
         pointsBez[selectedNodeIndex].y = startY - drag_y;        
         glutPostRedisplay();
     }
+    else if (option == 3) {
+        drag_x = (click_x - x);
+        drag_y = (click_y - 1000 + y);
+        pointsBezCubic[selectedNodeIndex].x = startX - drag_x;
+        pointsBezCubic[selectedNodeIndex].y = startY - drag_y;
+        if (selectedNodeIndex == 2) {
+            pointsBezCubic[4] = Point(2 * pointsBezCubic[3].x - pointsBezCubic[2].x, 2 * pointsBezCubic[3].y - pointsBezCubic[2].y, 0);
+        }
+        else if (selectedNodeIndex == 4) {
+            pointsBezCubic[2] = Point(2 * pointsBezCubic[3].x - pointsBezCubic[4].x, 2 * pointsBezCubic[3].y - pointsBezCubic[4].y, 0);
+        }
+        else if (selectedNodeIndex == 3) {
+            pointsBezCubic[4] = Point(2 * pointsBezCubic[3].x - pointsBezCubic[2].x, 2 * pointsBezCubic[3].y - pointsBezCubic[2].y, 0);
+        }
+        glutPostRedisplay();
+    }
 }
-
 
 void mouse(int button, int state, int x, int y) {
     if (option == 1) {
@@ -412,6 +434,45 @@ void mouse(int button, int state, int x, int y) {
                 printf("%d", nodeNum);
                 if (nodeNum == 6) {
                     readyToDrawBez = true;
+                }
+            }
+        }
+    }
+    else if (option == 3) {
+        if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+            if (readyToDrawBez1 && readyToDrawBez2) {
+                glutMotionFunc(onDrag);
+                drag_x = 0;
+                drag_y = 0;
+                click_x = x;
+                click_y = 1000 - y;
+                int minDistancePointIndex = 0;
+                for (int i = 0; i < 6; i++) {
+                    if (sqrt(pow(pointsBezCubic[i].x - click_x, 2) + pow(pointsBezCubic[i].y - click_y, 2)) < sqrt(pow(pointsBezCubic[minDistancePointIndex].x - click_x, 2) + pow(pointsBezCubic[minDistancePointIndex].y - click_y, 2))) {
+                        minDistancePointIndex = i;
+                    }
+                }
+                if (sqrt(pow(pointsBezCubic[minDistancePointIndex].x - click_x, 2) + pow(pointsBezCubic[minDistancePointIndex].y - click_y, 2)) < 20) {
+                    selectedNodeIndex = minDistancePointIndex;
+                    startX = pointsBezCubic[selectedNodeIndex].x;
+                    startY = pointsBezCubic[selectedNodeIndex].y;
+                }
+                else {
+                    glutMotionFunc(NULL);
+                }
+            }
+            else {
+                y = 1000 - y;
+                pointsBezCubic[nodeNum] = Point(x, y, 0);
+                nodeNum++;
+                printf("%d", nodeNum);
+                if (nodeNum == 4) {
+                    readyToDrawBez1 = true;
+                    pointsBezCubic[nodeNum] = Point(2 * pointsBezCubic[3].x - pointsBezCubic[2].x, 2 * pointsBezCubic[3].y - pointsBezCubic[2].y, 0);
+                    nodeNum++;
+                }
+                else if (nodeNum == 7) {
+                    readyToDrawBez2 = true;
                 }
             }
         }
@@ -534,6 +595,74 @@ void displayOption2(void) {
     }
 }
 
+void displayOption3(void) {
+    glPointSize(10);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < 7; i++) {
+        glVertex3f(pointsBezCubic[i].x, pointsBezCubic[i].y, pointsBezCubic[i].z);
+    }
+    glEnd();
+
+    if (readyToDrawBez1 == true) {
+        float maxX = pointsBezCubic[0].x;
+        float minX = pointsBezCubic[0].x;
+        for (int i = 0; i < 4; i++) {
+            if (pointsBezCubic[i].x > maxX) {
+                maxX = pointsBezCubic[i].x;
+            }
+            if (pointsBezCubic[i].x < minX) {
+                minX = pointsBezCubic[i].x;
+            }
+        }
+        glColor3f(0.7f, 0.0f, 1.0f);
+
+        glBegin(GL_LINE_STRIP);
+        for (double u = 0; u <= 1.0; u += 1.0 / (maxX - minX)) {
+            glVertex3f(
+                //x interpolation
+                lerp(lerp(lerp(pointsBezCubic[0].x, pointsBezCubic[1].x, u), lerp(pointsBezCubic[1].x, pointsBezCubic[2].x, u), u),
+                    lerp(lerp(pointsBezCubic[1].x, pointsBezCubic[2].x, u), lerp(pointsBezCubic[2].x, pointsBezCubic[3].x, u), u), u)
+                ,
+                //y interpolation
+                lerp(lerp(lerp(pointsBezCubic[0].y, pointsBezCubic[1].y, u), lerp(pointsBezCubic[1].y, pointsBezCubic[2].y, u), u),
+                    lerp(lerp(pointsBezCubic[1].y, pointsBezCubic[2].y, u), lerp(pointsBezCubic[2].y, pointsBezCubic[3].y, u), u), u)
+                //z
+                , 0);
+        }
+        glEnd();
+    }
+    if (readyToDrawBez2 == true) {
+        float maxX = pointsBezCubic[3].x;
+        float minX = pointsBezCubic[3].x;
+        for (int i = 3; i < 7; i++) {
+            if (pointsBezCubic[i].x > maxX) {
+                maxX = pointsBezCubic[i].x;
+            }
+            if (pointsBezCubic[i].x < minX) {
+                minX = pointsBezCubic[i].x;
+            }
+        }
+        glColor3f(0.7f, 0.0f, 1.0f);
+
+        glBegin(GL_LINE_STRIP);
+        for (double u = 0; u <= 1.0; u += 1.0 / (maxX - minX)) {
+            glVertex3f(
+                //x interpolation
+                lerp(lerp(lerp(pointsBezCubic[3].x, pointsBezCubic[4].x, u), lerp(pointsBezCubic[4].x, pointsBezCubic[5].x, u), u),
+                    lerp(lerp(pointsBezCubic[4].x, pointsBezCubic[5].x, u), lerp(pointsBezCubic[5].x, pointsBezCubic[6].x, u), u), u)
+                ,
+                //y interpolation
+                lerp(lerp(lerp(pointsBezCubic[3].y, pointsBezCubic[4].y, u), lerp(pointsBezCubic[4].y, pointsBezCubic[5].y, u), u),
+                    lerp(lerp(pointsBezCubic[4].y, pointsBezCubic[5].y, u), lerp(pointsBezCubic[5].y, pointsBezCubic[6].y, u), u), u)
+                //z
+                , 0);
+        }
+        glEnd();
+    }
+
+}
+
 void display(void) {
 	glClear(GL_COLOR_BUFFER_BIT);
 	glMatrixMode(GL_MODELVIEW);
@@ -545,6 +674,9 @@ void display(void) {
     }
     else if (option == 2) {
         displayOption2();
+    }
+    else if (option == 3) {
+        displayOption3();
     }
 	
 	glutSwapBuffers();
