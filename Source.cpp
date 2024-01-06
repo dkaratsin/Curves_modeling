@@ -26,6 +26,15 @@ float drag_y = 0;
 int selectedNodeIndex = -1;
 double startX = 0;  
 double startY = 0;
+GLubyte colors[4][3];
+int cameraAngle = 0;
+
+void catchKey(int key, int x, int y) {
+    if (key == GLUT_KEY_LEFT)
+        cameraAngle += 10;
+    else if (key == GLUT_KEY_RIGHT)
+        cameraAngle -= 10;
+}
 
 struct Point {
     GLfloat x, y, z;
@@ -35,7 +44,13 @@ struct Point {
 Point points[8];
 Point pointsBez[7];
 Point pointsBezCubic[7];
-
+Point pointsBicubicSurface[4][4] = {
+    {Point(0,0,0),Point(0,0,1),Point(0,0,2),Point(0,0,3)},
+    {Point(0.2,1,0),Point(1,1,1),Point(1,1,2),Point(0.2,1,3)},
+    {Point(0.2,2,0),Point(1,2,1),Point(1,2,2),Point(0.2,2,3)},
+    {Point(0,3,0),Point(0,3,1),Point(0,3,2),Point(0,3,3)}
+};
+double c[4][4];
 #define M_PI 3.14159265358979323846
 
 
@@ -159,7 +174,10 @@ void menu(int menuOption) {
         option = 3;
         nodeNum = 0;
     }
-	if (menuOption == 4) option = 4;
+    if (menuOption == 4) {
+        option = 4;
+        glutSpecialFunc(catchKey);
+    }
 
 	glutPostRedisplay();
 }
@@ -171,7 +189,7 @@ void myinit(void)
 
 	glViewport(0, 0, 1000, 1000);
 	glMatrixMode(GL_PROJECTION);
-	glOrtho(0.0, 1000.0, 0.0, 1000.0, 1.0, -1.0);
+	glOrtho(0.0, 1000.0, 0.0, 1000.0, 1000.0, -1000.0);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
@@ -182,6 +200,12 @@ void myinit(void)
 	glutAddMenuEntry("6th degree closed bezier curve (6+1 points) ", 2);
 	glutAddMenuEntry("2 part cubic bezier splines with C1 continuity", 3);
 	glutAddMenuEntry("bicubic surface (16 points)", 4);
+
+    for (int i = 0; i < 4; i++) {
+        colors[i][0] = rand() % 255;
+        colors[i][1] = rand() % 255;
+        colors[i][2] = rand() % 255;
+    }
 
 	// Associate a mouse button with menu
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
@@ -194,6 +218,38 @@ void reshape(int newWidth, int newHeight) {
 void idle(void) {
 	glutPostRedisplay();
 }
+
+void updateCoefficients(Point p[4][4]) {
+    c[0][0] = p[1][1].x;
+    c[0][1] = -.5 * p[1][0].x + .5 * p[1][2].x;
+    c[0][2] = p[1][0].x - 2.5 * p[1][1].x + 2 * p[1][2].x - .5 * p[1][3].x;
+    c[0][3] = -.5 * p[1][0].x + 1.5 * p[1][1].x - 1.5 * p[1][2].x + .5 * p[1][3].x;
+    c[1][0] = -.5 * p[0][1].x + .5 * p[2][1].x;
+    c[1][1] = .25 * p[0][0].x - .25 * p[0][2].x - .25 * p[2][0].x + .25 * p[2][2].x;
+    c[1][2] = -.5 * p[0][0].x + 1.25 * p[0][1].x - p[0][2].x + .25 * p[0][3].x + .5 * p[2][0].x - 1.25 * p[2][1].x + p[2][2].x - .25 * p[2][3].x;
+    c[1][3] = .25 * p[0][0].x - .75 * p[0][1].x + .75 * p[0][2].x - .25 * p[0][3].x - .25 * p[2][0].x + .75 * p[2][1].x - .75 * p[2][2].x + .25 * p[2][3].x;
+    c[2][0] = p[0][1].x - 2.5 * p[1][1].x + 2 * p[2][1].x - .5 * p[3][1].x;
+    c[2][1] = -.5 * p[0][0].x + .5 * p[0][2].x + 1.25 * p[1][0].x - 1.25 * p[1][2].x - p[2][0].x + p[2][2].x + .25 * p[3][0].x - .25 * p[3][2].x;
+    c[2][2] = p[0][0].x - 2.5 * p[0][1].x + 2 * p[0][2].x - .5 * p[0][3].x - 2.5 * p[1][0].x + 6.25 * p[1][1].x - 5 * p[1][2].x + 1.25 * p[1][3].x + 2 * p[2][0].x - 5 * p[2][1].x + 4 * p[2][2].x - p[2][3].x - .5 * p[3][0].x + 1.25 * p[3][1].x - p[3][2].x + .25 * p[3][3].x;
+    c[2][3] = -.5 * p[0][0].x + 1.5 * p[0][1].x - 1.5 * p[0][2].x + .5 * p[0][3].x + 1.25 * p[1][0].x - 3.75 * p[1][1].x + 3.75 * p[1][2].x - 1.25 * p[1][3].x - p[2][0].x + 3 * p[2][1].x - 3 * p[2][2].x + p[2][3].x + .25 * p[3][0].x - .75 * p[3][1].x + .75 * p[3][2].x - .25 * p[3][3].x;
+    c[3][0] = -.5 * p[0][1].x + 1.5 * p[1][1].x - 1.5 * p[2][1].x + .5 * p[3][1].x;
+    c[3][1] = .25 * p[0][0].x - .25 * p[0][2].x - .75 * p[1][0].x + .75 * p[1][2].x + .75 * p[2][0].x - .75 * p[2][2].x - .25 * p[3][0].x + .25 * p[3][2].x;
+    c[3][2] = -.5 * p[0][0].x + 1.25 * p[0][1].x - p[0][2].x + .25 * p[0][3].x + 1.5 * p[1][0].x - 3.75 * p[1][1].x + 3 * p[1][2].x - .75 * p[1][3].x - 1.5 * p[2][0].x + 3.75 * p[2][1].x - 3 * p[2][2].x + .75 * p[2][3].x + .5 * p[3][0].x - 1.25 * p[3][1].x + p[3][2].x - .25 * p[3][3].x;
+    c[3][3] = .25 * p[0][0].x - .75 * p[0][1].x + .75 * p[0][2].x - .25 * p[0][3].x - .75 * p[1][0].x + 2.25 * p[1][1].x - 2.25 * p[1][2].x + .75 * p[1][3].x + .75 * p[2][0].x - 2.25 * p[2][1].x + 2.25 * p[2][2].x - .75 * p[2][3].x - .25 * p[3][0].x + .75 * p[3][1].x - .75 * p[3][2].x + .25 * p[3][3].x;
+}
+
+double bicubicInterpolator(double y, double z) {
+    double y2 = y * y;
+    double y3 = y2 * y;
+    double z2 = z * z;
+    double z3 = z2 * z;
+
+    return(c[0][0] + c[0][1] * z + c[0][2] * z2 + c[0][3] * z3) +
+        (c[1][0] + c[1][1] * z + c[1][2] * z2 + c[1][3] * z3) * y +
+        (c[2][0] + c[2][1] * z + c[2][2] * z2 + c[2][3] * z3) * y2 +
+        (c[3][0] + c[3][1] * z + c[3][2] * z2 + c[3][3] * z3) * y3;
+}
+
 
 //u range 0 to 1
 float lerp(float a, float b, float u) {
@@ -317,6 +373,7 @@ void onDrag(int x, int y) {
         }
         glutPostRedisplay();
     }
+    
 }
 
 void mouse(int button, int state, int x, int y) {
@@ -663,6 +720,37 @@ void displayOption3(void) {
 
 }
 
+void displayOption4(void) {
+    glLoadIdentity();
+    
+    glTranslated(500, 500, 0);
+    glScaled(100, 100, 1);
+    
+    updateCoefficients(pointsBicubicSurface);
+    glPointSize(10);
+    glRotatef(cameraAngle, 0.0, 1.0, 0);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glBegin(GL_POINTS);
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            glVertex3f(pointsBicubicSurface[j][i].x,pointsBicubicSurface[j][i].y, pointsBicubicSurface[j][i].z);
+        }
+    }
+    glEnd();
+    
+    glPointSize(5);
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glBegin(GL_POINTS);
+    for (float y = 0; y < 3; y+= 0.1) {
+        for (float z = 0; z < 3; z+= 0.1) {
+            glVertex3f(bicubicInterpolator(y, z), y, z);
+        }
+    }
+    glEnd();
+    
+    
+}
+
 void display(void) {
 	glClear(GL_COLOR_BUFFER_BIT);
 	glMatrixMode(GL_MODELVIEW);
@@ -677,6 +765,9 @@ void display(void) {
     }
     else if (option == 3) {
         displayOption3();
+    }
+    else if (option == 4) {
+        displayOption4();
     }
 	
 	glutSwapBuffers();
