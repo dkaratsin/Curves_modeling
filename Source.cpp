@@ -504,7 +504,7 @@ void mouse(int button, int state, int x, int y) {
                 click_x = x;
                 click_y = 1000 - y;
                 int minDistancePointIndex = 0;
-                for (int i = 0; i < 6; i++) {
+                for (int i = 0; i < 7; i++) {
                     if (sqrt(pow(pointsBezCubic[i].x - click_x, 2) + pow(pointsBezCubic[i].y - click_y, 2)) < sqrt(pow(pointsBezCubic[minDistancePointIndex].x - click_x, 2) + pow(pointsBezCubic[minDistancePointIndex].y - click_y, 2))) {
                         minDistancePointIndex = i;
                     }
